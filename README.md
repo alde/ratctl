@@ -24,23 +24,35 @@ Adding a new device means implementing the wire protocol and adding a `DeviceDes
 
 ## Installation
 
-### From source
+### Quick install
+
+```sh
+make && sudo make install
+```
+
+This builds the binary, installs it to `/usr/local/bin`, and copies the udev rules. Then reload:
+
+```sh
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+Log out and back in (or reboot) for device permissions to take effect.
+
+### From source (cargo only)
 
 ```sh
 cargo install --path .
-```
-
-### udev rules
-
-You need permission to access `/dev/hidraw*` and `/dev/input/event*` devices. Copy the included rules file:
-
-```sh
 sudo cp udev/99-ratctl.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-Then log out and back in (or reboot) for `uaccess` tags to take effect.
+### Uninstall
+
+```sh
+sudo make uninstall
+```
 
 ## Usage
 
