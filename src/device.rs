@@ -110,13 +110,17 @@ pub fn detect_from_path(path: &Path) -> Result<DetectedDevice> {
     bail!("Could not read VID/PID for {}", path.display());
 }
 
-/// Scan sysfs for a supported hidraw device on interface 0 (vendor control).
-/// Checks all known devices in the registry.
-pub fn find_device() -> Result<DetectedDevice> {
+/// Scan sysfs for all supported hidraw devices on interface 0 (vendor control).
+pub fn find_all_devices() -> Result<Vec<DetectedDevice>> {
     let hidraw_dir = PathBuf::from("/sys/class/hidraw");
     if !hidraw_dir.exists() {
         bail!("/sys/class/hidraw not found — is this a Linux system?");
     }
+
+    let mut found = Vec::new();
+    // Track which descriptors we've already matched to avoid duplicates
+    // (a device may have multiple hidraw nodes on interface 0)
+    let mut seen_names: Vec<&str> = Vec::new();
 
     for entry in fs::read_dir(&hidraw_dir).context("Failed to read /sys/class/hidraw")? {
         let entry = entry?;
@@ -132,10 +136,12 @@ pub fn find_device() -> Result<DetectedDevice> {
 
         if let Some((vid, pid)) = parse_hid_id(&uevent) {
             if let Some(descriptor) = devices::find_descriptor(vid, pid) {
-                if is_interface(&entry.path(), "00")? {
-                    let dev_path = PathBuf::from("/dev").join(name);
-                    return Ok(DetectedDevice {
-                        path: dev_path,
+                if !seen_names.contains(&descriptor.name)
+                    && is_interface(&entry.path(), "00")?
+                {
+                    seen_names.push(descriptor.name);
+                    found.push(DetectedDevice {
+                        path: PathBuf::from("/dev").join(name),
                         descriptor,
                     });
                 }
@@ -143,12 +149,21 @@ pub fn find_device() -> Result<DetectedDevice> {
         }
     }
 
-    let supported: Vec<&str> = devices::REGISTRY.iter().map(|d| d.name).collect();
-    bail!(
-        "No supported mouse found. Supported devices: {}\n\
-         Check the mouse is connected and you have permissions on /dev/hidraw*",
-        supported.join(", ")
-    );
+    Ok(found)
+}
+
+/// Scan sysfs for a single supported device. Errors if none found.
+pub fn find_device() -> Result<DetectedDevice> {
+    let mut devices = find_all_devices()?;
+    if devices.is_empty() {
+        let supported: Vec<&str> = devices::REGISTRY.iter().map(|d| d.name).collect();
+        bail!(
+            "No supported mouse found. Supported devices: {}\n\
+             Check the mouse is connected and you have permissions on /dev/hidraw*",
+            supported.join(", ")
+        );
+    }
+    Ok(devices.remove(0))
 }
 
 /// Parse HID_ID=BBBB:VVVVVVVV:PPPPPPPP from a uevent file.

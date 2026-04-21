@@ -11,6 +11,7 @@ mod types;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use crate::devices::{DeviceDescriptor, ProtocolKind};
@@ -79,6 +80,46 @@ fn open_protocol(
     }
 }
 
+/// When multiple devices are found and no --device flag was given,
+/// prompt the user to pick one.
+fn pick_device(devices: Vec<device::DetectedDevice>) -> Result<device::DetectedDevice> {
+    if devices.is_empty() {
+        let supported: Vec<&str> = devices::REGISTRY.iter().map(|d| d.name).collect();
+        anyhow::bail!(
+            "No supported mouse found. Supported devices: {}\n\
+             Check the mouse is connected and you have permissions on /dev/hidraw*",
+            supported.join(", ")
+        );
+    }
+    if devices.len() == 1 {
+        return Ok(devices.into_iter().next().unwrap());
+    }
+
+    eprintln!("Multiple supported mice found:");
+    for (i, dev) in devices.iter().enumerate() {
+        eprintln!("  [{}] {} ({})", i + 1, dev.descriptor.name, dev.path.display());
+    }
+    eprint!("Select device [1-{}]: ", devices.len());
+    io::stderr().flush()?;
+
+    let line = io::stdin()
+        .lock()
+        .lines()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("No input"))??;
+
+    let choice: usize = line
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid selection: '{}'", line.trim()))?;
+
+    if choice < 1 || choice > devices.len() {
+        anyhow::bail!("Selection out of range: {}", choice);
+    }
+
+    Ok(devices.into_iter().nth(choice - 1).unwrap())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -88,9 +129,17 @@ fn main() -> Result<()> {
 
     let config_path = cli.config.unwrap_or_else(config::default_config_path);
 
+    // Status shows all devices when no --device flag is given
+    if matches!(cli.command, Command::Status) && cli.device.is_none() {
+        return cmd_status_all();
+    }
+
     let detected = match cli.device {
         Some(ref p) => device::detect_from_path(p)?,
-        None => device::find_device()?,
+        None => {
+            let all = device::find_all_devices()?;
+            pick_device(all)?
+        }
     };
 
     let desc = detected.descriptor;
@@ -101,7 +150,7 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Dump { profile } => cmd_dump(proto.as_mut(), desc, &config_path, profile),
         Command::Apply { profile } => cmd_apply(proto.as_mut(), desc, &config_path, profile),
-        Command::Status => cmd_status(proto.as_mut(), desc),
+        Command::Status => unreachable!(), // handled above
         Command::Tui => cmd_tui(proto.as_mut(), desc, &config_path),
         Command::Profile { index } => cmd_profile(proto.as_mut(), desc, index),
         Command::Devices => unreachable!(),
@@ -122,6 +171,48 @@ fn cmd_devices() -> Result<()> {
             desc.name, status, desc.vendor_id, pids.join(", ")
         );
     }
+    Ok(())
+}
+
+/// Show status for all connected supported mice.
+fn cmd_status_all() -> Result<()> {
+    let all = device::find_all_devices()?;
+    if all.is_empty() {
+        let supported: Vec<&str> = devices::REGISTRY.iter().map(|d| d.name).collect();
+        anyhow::bail!(
+            "No supported mouse found. Supported devices: {}\n\
+             Check the mouse is connected and you have permissions on /dev/hidraw*",
+            supported.join(", ")
+        );
+    }
+
+    let count = all.len();
+    for (i, detected) in all.into_iter().enumerate() {
+        if i > 0 {
+            println!();
+            println!("---");
+            println!();
+        }
+        println!("=== {} ({}) ===", detected.descriptor.name, detected.path.display());
+        println!();
+
+        match open_protocol(&detected) {
+            Ok(mut proto) => {
+                if let Err(e) = cmd_status(proto.as_mut(), detected.descriptor) {
+                    eprintln!("Error reading {}: {}", detected.descriptor.name, e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error opening {}: {}", detected.descriptor.name, e);
+            }
+        }
+    }
+
+    if count > 1 {
+        println!();
+        println!("({} devices)", count);
+    }
+
     Ok(())
 }
 
