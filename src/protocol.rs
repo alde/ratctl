@@ -54,7 +54,7 @@ pub fn get_profile_data(dev: &mut HidrawDevice) -> Result<ProfileData> {
     let req = make_request(CMD_GET_PROFILE_DATA);
     let resp = dev.transact(&req)?;
 
-    let current_profile = resp[8];
+    let current_profile = resp[6];
     let fw = format!("{}.{}.{}", resp[13], resp[12], resp[11]);
 
     Ok(ProfileData {
@@ -66,23 +66,33 @@ pub fn get_profile_data(dev: &mut HidrawDevice) -> Result<ProfileData> {
 /// Read all button bindings for the current profile.
 ///
 /// Response layout from byte 4: pairs of (action_code, action_type) for each button slot.
+/// Devices with multiple button groups (e.g. ASUS side buttons) are read by iterating
+/// over groups specified in `desc.button_group_sizes`.
 pub fn get_button_data(dev: &mut HidrawDevice, desc: &DeviceDescriptor) -> Result<Vec<ButtonBinding>> {
-    let mut req = make_request(CMD_GET_BUTTON_DATA);
-    req[2] = 0; // group 0 (primary buttons)
-    let resp = dev.transact(&req)?;
+    let groups = if desc.button_group_sizes.is_empty() {
+        // Single group: all buttons in group 0
+        vec![desc.button_slots.len()]
+    } else {
+        desc.button_group_sizes.to_vec()
+    };
 
-    let num_buttons = desc.button_slots.len();
-    let mut buttons = Vec::with_capacity(num_buttons);
-    for i in 0..num_buttons {
-        let offset = 4 + i * 2;
-        let kind = match resp[offset + 1] {
-            0 => BindingKind::Keyboard,
-            _ => BindingKind::Mouse,
-        };
-        buttons.push(ButtonBinding {
-            action_code: resp[offset],
-            kind,
-        });
+    let mut buttons = Vec::with_capacity(desc.button_slots.len());
+    for (group_idx, &group_size) in groups.iter().enumerate() {
+        let mut req = make_request(CMD_GET_BUTTON_DATA);
+        req[2] = group_idx as u8;
+        let resp = dev.transact(&req)?;
+
+        for i in 0..group_size {
+            let offset = 4 + i * 2;
+            let kind = match resp[offset + 1] {
+                0 => BindingKind::Keyboard,
+                _ => BindingKind::Mouse,
+            };
+            buttons.push(ButtonBinding {
+                action_code: resp[offset],
+                kind,
+            });
+        }
     }
     Ok(buttons)
 }

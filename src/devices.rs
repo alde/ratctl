@@ -20,6 +20,8 @@ pub struct DeviceDescriptor {
     pub protocol: ProtocolKind,
     pub num_profiles: usize,
     pub button_slots: &'static [ButtonCode],
+    /// Number of buttons per HID button group (ASUS only, others use &[]).
+    pub button_group_sizes: &'static [usize],
     pub num_leds: usize,
     pub led_names: &'static [&'static str],
     pub num_dpi_presets: usize,
@@ -55,6 +57,8 @@ pub static SPATHA_X: DeviceDescriptor = DeviceDescriptor {
     product_ids: &[0x1977, 0x1979],
     protocol: ProtocolKind::Asus,
     num_profiles: 5,
+    // Group 0: primary (8), Group 1: side buttons (6)
+    // DpiCycle and DpiTarget share one physical button.
     button_slots: &[
         ButtonCode::LeftClick,
         ButtonCode::RightClick,
@@ -62,7 +66,6 @@ pub static SPATHA_X: DeviceDescriptor = DeviceDescriptor {
         ButtonCode::Back,
         ButtonCode::Forward,
         ButtonCode::DpiCycle,
-        ButtonCode::DpiTarget,
         ButtonCode::ScrollUp,
         ButtonCode::ScrollDown,
         ButtonCode::SideA,
@@ -72,6 +75,7 @@ pub static SPATHA_X: DeviceDescriptor = DeviceDescriptor {
         ButtonCode::SideE,
         ButtonCode::SideF,
     ],
+    button_group_sizes: &[8, 6],
     num_leds: 3,
     led_names: &["logo", "wheel", "side"],
     num_dpi_presets: 4,
@@ -99,6 +103,7 @@ pub static DEATHADDER_V2: DeviceDescriptor = DeviceDescriptor {
         ButtonCode::ScrollUp,
         ButtonCode::ScrollDown,
     ],
+    button_group_sizes: &[],
     num_leds: 2,
     led_names: &["logo", "scroll"],
     num_dpi_presets: 5,
@@ -139,6 +144,7 @@ pub static SCIMITAR_RGB_ELITE: DeviceDescriptor = DeviceDescriptor {
         ButtonCode::SideK,
         ButtonCode::SideL,
     ],
+    button_group_sizes: &[],
     num_leds: 4,
     led_names: &["logo", "scroll", "side_panel", "dpi_indicator"],
     num_dpi_presets: 5,
