@@ -27,10 +27,11 @@ Adding a new device means implementing the wire protocol and adding a `DeviceDes
 ### Quick install
 
 ```sh
-make && sudo make install
+make
+sudo make install
 ```
 
-This builds the binary, installs it to `/usr/local/bin`, and copies the udev rules. Then reload:
+This builds the binary as your user, then installs it to `/usr/local/bin` and copies the udev rules as root. Then reload:
 
 ```sh
 sudo udevadm control --reload-rules
