@@ -75,8 +75,8 @@ fn hidiocsfeature(len: usize) -> libc::c_ulong {
 }
 
 fn hidiocgfeature(len: usize) -> libc::c_ulong {
-    // _IOC(_IOC_READ, 'H', 0x07, len)
-    let dir: libc::c_ulong = 0x80000000; // _IOC_READ only
+    // _IOC(_IOC_WRITE|_IOC_READ, 'H', 0x07, len)
+    let dir: libc::c_ulong = 0xC0000000; // _IOC_WRITE | _IOC_READ
     let typ: libc::c_ulong = (b'H' as libc::c_ulong) << 8;
     let nr: libc::c_ulong = 0x07;
     let size: libc::c_ulong = (len as libc::c_ulong) << 16;
