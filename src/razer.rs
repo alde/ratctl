@@ -383,7 +383,7 @@ pub fn apply_profile(dev: &RazerDevice, desc: &DeviceDescriptor, profile: &Devic
 
 // --- Device discovery ---
 
-/// Find the Razer hidraw device on interface 2.
+/// Find the Razer hidraw device on interface 0 (feature reports).
 pub fn find_razer_hidraw(desc: &DeviceDescriptor) -> Result<PathBuf> {
-    crate::device::find_hidraw_for_device(desc, "02")
+    crate::device::find_hidraw_for_device(desc, "00")
 }
