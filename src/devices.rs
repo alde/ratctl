@@ -82,7 +82,7 @@ pub static SPATHA_X: DeviceDescriptor = DeviceDescriptor {
     dpi_min: 100,
     dpi_max: 19000,
     dpi_step: 50,
-    brightness_max: 100,
+    brightness_max: 255,
 };
 
 // --- Razer devices ---
