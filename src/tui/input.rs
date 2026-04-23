@@ -5,7 +5,7 @@ use crate::config::{self, Config};
 use crate::protocols::MouseProtocol;
 use crate::types::{DEBOUNCE_TIMES, LedMode, POLLING_RATES};
 
-use super::views::binding_action_list;
+use super::views::filtered_binding_list;
 use super::{App, Mode, Tab};
 
 pub fn handle_key(
@@ -170,28 +170,64 @@ fn handle_normal(
 }
 
 fn handle_editing_binding(app: &mut App, key: KeyEvent, slot: usize) {
-    let actions = binding_action_list();
+    let is_filtering = app.binding_filter.is_some();
+    let filtered = filtered_binding_list(&app.binding_filter);
+
     match key.code {
         KeyCode::Esc => {
-            app.mode = Mode::Normal;
+            if is_filtering {
+                app.binding_filter = None;
+                app.binding_cursor = 0;
+            } else {
+                app.mode = Mode::Normal;
+            }
         }
-        KeyCode::Up | KeyCode::Char('k') => {
+        KeyCode::Up => {
             if app.binding_cursor > 0 {
                 app.binding_cursor -= 1;
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if app.binding_cursor < actions.len() - 1 {
+        KeyCode::Char('k') if !is_filtering => {
+            if app.binding_cursor > 0 {
+                app.binding_cursor -= 1;
+            }
+        }
+        KeyCode::Down => {
+            if !filtered.is_empty() && app.binding_cursor < filtered.len() - 1 {
+                app.binding_cursor += 1;
+            }
+        }
+        KeyCode::Char('j') if !is_filtering => {
+            if !filtered.is_empty() && app.binding_cursor < filtered.len() - 1 {
                 app.binding_cursor += 1;
             }
         }
         KeyCode::Enter => {
-            if let Some((name, binding)) = actions.get(app.binding_cursor) {
+            if let Some((name, binding)) = filtered.get(app.binding_cursor) {
                 app.current_profile_mut().buttons[slot] = *binding;
                 app.mark_dirty();
+                app.binding_filter = None;
                 app.mode = Mode::Normal;
                 app.set_status(format!("Set button {} to {}", slot, name));
             }
+        }
+        KeyCode::Char('/') if !is_filtering => {
+            app.binding_filter = Some(String::new());
+        }
+        KeyCode::Backspace if is_filtering => {
+            if let Some(ref mut f) = app.binding_filter {
+                f.pop();
+                if f.is_empty() {
+                    app.binding_filter = Some(String::new());
+                }
+            }
+            app.binding_cursor = 0;
+        }
+        KeyCode::Char(c) if is_filtering => {
+            if let Some(ref mut f) = app.binding_filter {
+                f.push(c);
+            }
+            app.binding_cursor = 0;
         }
         _ => {}
     }

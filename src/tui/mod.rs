@@ -84,6 +84,7 @@ pub struct App {
     pub confirm_quit: bool,
     pub input_buf: String,
     pub binding_cursor: usize,
+    pub binding_filter: Option<String>,
 }
 
 impl App {
@@ -154,6 +155,7 @@ pub fn run(
         confirm_quit: false,
         input_buf: String::new(),
         binding_cursor: 0,
+        binding_filter: None,
     };
 
     let original_hook = std::panic::take_hook();

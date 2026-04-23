@@ -274,10 +274,24 @@ fn render_binding_popup(f: &mut Frame, app: &App, slot: usize) {
         .map(|c| c.name())
         .unwrap_or("?");
 
-    let actions = binding_action_list();
-    let items: Vec<ListItem> = actions
+    let filtered = filtered_binding_list(&app.binding_filter);
+
+    let area = centered_rect(40, 70, f.area());
+    // Available rows for list items (area height minus borders minus filter line)
+    let visible_rows = area.height.saturating_sub(4) as usize;
+
+    // Scroll offset to keep cursor visible
+    let scroll_offset = if app.binding_cursor >= visible_rows {
+        app.binding_cursor - visible_rows + 1
+    } else {
+        0
+    };
+
+    let items: Vec<ListItem> = filtered
         .iter()
         .enumerate()
+        .skip(scroll_offset)
+        .take(visible_rows)
         .map(|(i, (name, _))| {
             let style = if i == app.binding_cursor {
                 Style::default().fg(Color::Black).bg(Color::Yellow)
@@ -288,12 +302,17 @@ fn render_binding_popup(f: &mut Frame, app: &App, slot: usize) {
         })
         .collect();
 
-    let area = centered_rect(40, 60, f.area());
+    let title = match &app.binding_filter {
+        Some(f) => format!("Bind: {}  /{}_  [Enter] select  [Esc] clear", slot_name, f),
+        None => format!("Bind: {}  [/] search  [Enter] select  [Esc] cancel", slot_name),
+    };
+
+    let area = centered_rect(40, 70, f.area());
     f.render_widget(Clear, area);
     let list = List::new(items).block(
         Block::default()
             .borders(Borders::ALL)
-            .title(format!("Bind: {} [Enter] select [Esc] cancel", slot_name)),
+            .title(title),
     );
     f.render_widget(list, area);
 }
@@ -324,6 +343,19 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+pub fn filtered_binding_list(filter: &Option<String>) -> Vec<(&'static str, crate::types::ButtonBinding)> {
+    let all = binding_action_list();
+    match filter {
+        Some(f) if !f.is_empty() => {
+            let f = f.to_lowercase();
+            all.into_iter()
+                .filter(|(name, _)| name.contains(&f))
+                .collect()
+        }
+        _ => all,
+    }
 }
 
 pub fn binding_action_list() -> Vec<(&'static str, crate::types::ButtonBinding)> {
